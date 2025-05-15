@@ -83,6 +83,22 @@ async function tornarPublico(id) {
 }
 
 
+export async function deleteFile(driveId) {
+    try {
+        const response = await drive.files.delete({
+            fileId: driveId,
+        })
+        console.log(response.data, response.status)
+    } catch (erro) {
+        console.log(erro.message)
+    }
+}
+
+
+
+
+
+
 
 
 export async function listarAr(req, res) {

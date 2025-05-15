@@ -1,5 +1,5 @@
 import { getAr } from "../src/models/model.js";
-//import { deleteFile } from "../src/controllers/controller.js";
+import { deleteFile } from "../src/controllers/controller.js";
 
 export default async function excluirAr(req, res) {
     const agora = new Date()
