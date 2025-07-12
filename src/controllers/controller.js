@@ -1,7 +1,7 @@
-import { getAr, postAr } from "../models/model.js";
+import { getAr, postAr, deleteAr } from "../models/model.js";
 import { google } from "googleapis";
 import FormData from "form-data";
-import axios from "axios"; 
+import axios from "axios";
 import { file } from "googleapis/build/src/apis/file/index.js";
 import { NodeIO } from '@gltf-transform/core';
 
@@ -142,6 +142,7 @@ export async function cadastrarAr(req, res) {
             username: req.body.username,
             driveId: newDriveId,
             nome: req.body.nome,
+            nomeAnimacao: req.body.nomeAnimacao,
             animacao: req.body.animacao,
             timestamp: req.body.timestamp
         })
@@ -150,6 +151,32 @@ export async function cadastrarAr(req, res) {
             newDriveId: newDriveId,
         });
 
+    } catch (erro) {
+        console.error(erro.message);
+        return res.status(500).json({ "Erro": "Falha na requisição" });
+    }
+}
+
+export async function postarAr(req, res) {
+    try {
+        await postAr({
+            username: req.body.username,
+            nome: req.body.nome,
+        })
+        return res.status(200).send("Modelo estático acessado.");
+    } catch (erro) {
+        console.error(erro.message);
+        return res.status(500).json({ "Erro": "Falha na requisição" });
+    }
+}
+
+export async function excluirTodosAr(req, res) {
+    try {
+        const ar = await getAr();
+        ar.forEach(async (modelData) => {
+            await deleteAr({ username: modelData.username });
+        })
+        return res.status(200).send("Todos os AR foram excluídos com sucesso.");
     } catch (erro) {
         console.error(erro.message);
         return res.status(500).json({ "Erro": "Falha na requisição" });

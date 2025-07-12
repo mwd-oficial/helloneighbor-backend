@@ -1,6 +1,6 @@
 import express from "express";
 import cors from "cors";
-import { listarAr, cadastrarAr } from "../controllers/controller.js";
+import { listarAr, cadastrarAr, postarAr, excluirTodosAr } from "../controllers/controller.js";
 import excluirAr from "../programado.js"
 
 const corsOptions = {
@@ -19,5 +19,7 @@ export function routes(app) {
 
     app.get("/ar", listarAr)
     app.post("/ar/cadastrar", cadastrarAr)
+    app.post("/ar/postar", postarAr)
     app.get("/ar/excluir", excluirAr)
+    //app.get("/ar/excluirTodos", excluirTodosAr);
 }
