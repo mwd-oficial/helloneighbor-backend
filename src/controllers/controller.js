@@ -1,99 +1,30 @@
 import { getAr, postAr, deleteAr } from "../models/model.js";
-import { google } from "googleapis";
-import FormData from "form-data";
-import axios from "axios";
-import { file } from "googleapis/build/src/apis/file/index.js";
 import { NodeIO } from '@gltf-transform/core';
 
-const oauth2Client = new google.auth.OAuth2(
-    process.env.CLIENT_ID,
-    process.env.CLIENT_SECRET,
-    process.env.REDIRECT_URI
-)
 
-oauth2Client.setCredentials({ refresh_token: process.env.REFRESH_TOKEN })
 
-const drive = google.drive({
-    version: "v3",
-    auth: oauth2Client
-})
 
-async function getNewAccessToken(refreshToken, clientId, clientSecret) {
-    const response = await axios.post('https://oauth2.googleapis.com/token', null, {
-        params: {
-            client_id: clientId,
-            client_secret: clientSecret,
-            refresh_token: refreshToken,
-            grant_type: 'refresh_token'
-        }
+export async function uploadToVercelBlob(buffer, pathname, contentType) {
+    const blob = await put(pathname, buffer, {
+        access: 'public', // ou 'private', dependendo do seu caso
+        token: process.env.BLOB_READ_WRITE_TOKEN,
+        content_type: contentType,
     });
-    return response.data.access_token;
+
+    // blob.url é a URL base e blob.downloadUrl força o download
+    return blob.url;
 }
 
-async function uploadFile(arquivo, bodyData) {
+export async function deleteFile(blobPath) {
     try {
-        const newAccessToken = await getNewAccessToken(process.env.REFRESH_TOKEN, process.env.CLIENT_ID, process.env.CLIENT_SECRET);
-        const folderId = "1Ms9AE4JfTfAmdBtcN0aP_3TVVpwYiuVO";
-        const form = new FormData();
-        const nomeArquivo = `${bodyData.username}-${bodyData.nome}-${bodyData.timestamp}.glb`;
-
-        form.append('metadata', JSON.stringify({
-            name: nomeArquivo,
-            mimeType: 'model/gltf-binary',
-            parents: [folderId]
-        }), {
-            contentType: 'application/json'
-        });
-
-        form.append('file', arquivo, {
-            filename: nomeArquivo,
-            contentType: 'model/gltf-binary'
-        });
-
-        const res = await axios.post('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', form, {
-            headers: {
-                'Authorization': `Bearer ${newAccessToken}`,
-                ...form.getHeaders()
-            }
-        });
-
-        await tornarPublico(res.data.id)
-
-        console.log(res.data);
-
-        return res.data.id;
-    } catch (erro) {
-        console.log("Erro ao fazer upload para o Google Drive: " + erro)
-    }
-}
-
-async function tornarPublico(id) {
-    try {
-        await drive.permissions.create({
-            fileId: id,
-            requestBody: {
-                role: "reader",
-                type: "anyone"
-            }
+        await del(blobPath, {
+            token: process.env.BLOB_READ_WRITE_TOKEN,
         })
-        console.log(`Arquivo com ID ${id} agora está público.`);
+        console.log(`Arquivo ${blobPath} deletado com sucesso.`)
     } catch (erro) {
-        console.log(erro.message)
+        console.error(`Erro ao deletar ${blobPath}: ${erro.message}`)
     }
 }
-
-
-export async function deleteFile(driveId) {
-    try {
-        const response = await drive.files.delete({
-            fileId: driveId,
-        })
-        console.log(response.data, response.status)
-    } catch (erro) {
-        console.log(erro.message)
-    }
-}
-
 
 
 
@@ -106,6 +37,89 @@ export async function listarAr(req, res) {
     return res.status(200).json(models);
 }
 
+export async function cadastrarAr(req, res) {
+    console.log("ar executado");
+
+    try {
+        const filePath = req.body.src;
+
+        if (!filePath) {
+            return res.status(400).json({ "Erro": "Caminho do arquivo não enviado" });
+        }
+
+        // 🔥 Monta URL pública do arquivo
+        const fileUrl = `https://raw.githubusercontent.com/mwd-oficial/backend/main/public/${filePath}`
+
+        console.log("fileUrl:", fileUrl);
+
+        let buffer;
+
+        try {
+            // 🔥 Busca o arquivo via HTTP (em vez de fs)
+            const response = await fetch(fileUrl);
+
+            if (!response.ok) {
+                throw new Error("Erro ao buscar arquivo");
+            }
+
+            const arrayBuffer = await response.arrayBuffer();
+            buffer = Buffer.from(arrayBuffer);
+
+        } catch (erro) {
+            console.error("Erro ao buscar arquivo:", erro);
+            return res.status(400).json({ "Erro": "Arquivo não encontrado" });
+        }
+
+        // 2️⃣ Lê o buffer usando glTF-transform
+        const io = new NodeIO();
+        const doc = await io.readBinary(buffer);
+
+        if (req.body.animacao) {
+            // 3️⃣ Filtra animações
+            const root = doc.getRoot();
+            const animations = root.listAnimations();
+            animations.forEach(anim => {
+                if (anim.getName().toLowerCase() !== req.body.animacao.toLowerCase()) {
+                    anim.dispose();
+                }
+            });
+        }
+
+        // 4️⃣ Regrava o modelo filtrado em buffer
+        const arrayBuffer = await io.writeBinary(doc);
+        const novoBuffer = Buffer.from(arrayBuffer);
+
+        console.log('Arquivo pronto para upload no Vercel Blob!');
+
+        // 5️⃣ Upload para Vercel Blob
+        const blobFileName = `${req.body.nome || 'modelo'}-${req.body.timestamp}.glb`;
+        const contentType = 'model/gltf-binary';
+        const blobUrl = await uploadToVercelBlob(novoBuffer, blobFileName, contentType);
+
+        console.log('Upload finalizado: ', blobUrl);
+
+        // 6️⃣ Salva registro no banco
+        await postAr({
+            username: req.body.username,
+            blobUrl: blobUrl, // Agora armazenamos a URL do Blob
+            nomeBlob: blobFileName, // Armazenamos o nome do arquivo no Blob para referência futura
+            nome: req.body.nome,
+            nomeAnimacao: req.body.nomeAnimacao,
+            animacao: req.body.animacao,
+            timestamp: req.body.timestamp
+        });
+
+        // 7️⃣ Retorna a URL do arquivo no Blob
+        return res.status(200).json({
+            blobUrl: blobUrl,
+        });
+
+    } catch (erro) {
+        console.error(erro.message);
+        return res.status(500).json({ "Erro": "Falha na requisição" });
+    }
+}
+/*
 export async function cadastrarAr(req, res) {
     console.log("ar executado")
     try {
@@ -169,7 +183,7 @@ export async function postarAr(req, res) {
         return res.status(500).json({ "Erro": "Falha na requisição" });
     }
 }
-
+*/
 export async function excluirTodosAr(req, res) {
     try {
         const ar = await getAr();
