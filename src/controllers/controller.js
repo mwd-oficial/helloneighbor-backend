@@ -48,7 +48,7 @@ export async function cadastrarAr(req, res) {
         }
 
         // 🔥 Monta URL pública do arquivo
-        const fileUrl = `https://raw.githubusercontent.com/mwd-oficial/backend/main/public/${filePath}`
+        const fileUrl = `https://raw.githubusercontent.com/mwd-oficial/helloneighbor-backend/main/public/${filePath}`
 
         console.log("fileUrl:", fileUrl);
 

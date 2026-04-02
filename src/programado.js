@@ -13,10 +13,10 @@ export default async function excluirAr(req, res) {
 
     for (const model of expirados) {
         try {
-            await deleteFile(model.driveId)
-            console.log(`modelo ${model.driveId} deletado.`)
+            await deleteFile(model.nomeBlob)
+            console.log(`modelo ${model.nomeBlob} deletado.`)
         } catch (err) {
-            console.error(`Erro ao deletar ${model.driveId}: ${err.message}`)
+            console.error(`Erro ao deletar ${model.nomeBlob}: ${err.message}`)
         }
     }
 
